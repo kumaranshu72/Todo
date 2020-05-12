@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"todo/pkg/protocol/grpc"
+	"todo/pkg/protocol/rest"
 
 	// mysql driver
 	v1 "todo/pkg/service/v1"
@@ -15,6 +16,7 @@ import (
 
 // Config Configure the server
 type Config struct {
+	HTTPPort            string
 	GRPCPort            string
 	DatastoreDBHost     string
 	DatastoreDBUser     string
@@ -29,6 +31,7 @@ func RunServer() error {
 	// get Configuration
 	var cfg Config
 	flag.StringVar(&cfg.GRPCPort, "grpc-port", "", "gRPC port to bind")
+	flag.StringVar(&cfg.HTTPPort, "http-port", "", "HTTP port to bind")
 	flag.StringVar(&cfg.DatastoreDBHost, "db-host", "", "Database host")
 	flag.StringVar(&cfg.DatastoreDBUser, "db-user", "", "Database user")
 	flag.StringVar(&cfg.DatastoreDBPassword, "db-password", "", "Database password")
@@ -37,6 +40,10 @@ func RunServer() error {
 
 	if len(cfg.GRPCPort) == 0 {
 		return fmt.Errorf("invalid TCP port for gRPC server: '%s'", cfg.GRPCPort)
+	}
+
+	if len(cfg.HTTPPort) == 0 {
+		return fmt.Errorf("invalid TCP port for HTTP gateway: '%s'", cfg.HTTPPort)
 	}
 
 	// add MySQL driver specific parameter to parse date/time
@@ -57,6 +64,11 @@ func RunServer() error {
 	defer db.Close()
 
 	v1API := v1.NewToDoServiceServer(db)
+
+	// run HTTP gateway
+	go func() {
+		_ = rest.RunServer(ctx, cfg.GRPCPort, cfg.HTTPPort)
+	}()
 
 	return grpc.RunServer(ctx, v1API, cfg.GRPCPort)
 }
